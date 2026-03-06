@@ -1,0 +1,747 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>God's War on Borrowed Money — Data Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --blood: #c0392b;
+    --blood-dark: #7b241c;
+    --gold: #d4ac0d;
+    --cream: #f5f0e8;
+    --charcoal: #1a1a1a;
+    --mid: #2c2c2c;
+    --dim: #444;
+    --line: rgba(255,255,255,0.08);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--charcoal);
+    color: var(--cream);
+    font-family: 'IBM Plex Sans', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Noise texture overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0.4;
+  }
+
+  .container {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 40px 20px;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* Header */
+  .header {
+    border-left: 4px solid var(--blood);
+    padding-left: 24px;
+    margin-bottom: 48px;
+    animation: fadeIn 0.8s ease forwards;
+  }
+
+  .issue-tag {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 3px;
+    color: var(--blood);
+    text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+
+  .header h1 {
+    font-family: 'Playfair Display', serif;
+    font-size: clamp(24px, 4vw, 42px);
+    font-weight: 900;
+    line-height: 1.15;
+    color: var(--cream);
+    margin-bottom: 12px;
+  }
+
+  .header h1 span {
+    color: var(--blood);
+  }
+
+  .subtitle {
+    font-size: 13px;
+    color: #888;
+    font-family: 'IBM Plex Mono', monospace;
+    letter-spacing: 1px;
+  }
+
+  /* Stat Cards Row */
+  .stat-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 16px;
+    margin-bottom: 48px;
+  }
+
+  .stat-card {
+    background: var(--mid);
+    border: 1px solid var(--line);
+    border-top: 2px solid var(--blood);
+    padding: 20px 16px;
+    animation: slideUp 0.6s ease forwards;
+    opacity: 0;
+    transition: transform 0.2s ease, border-color 0.2s ease;
+  }
+
+  .stat-card:hover {
+    transform: translateY(-3px);
+    border-color: var(--blood);
+  }
+
+  .stat-card:nth-child(1) { animation-delay: 0.1s; }
+  .stat-card:nth-child(2) { animation-delay: 0.2s; }
+  .stat-card:nth-child(3) { animation-delay: 0.3s; }
+  .stat-card:nth-child(4) { animation-delay: 0.4s; }
+
+  .stat-value {
+    font-family: 'Playfair Display', serif;
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--blood);
+    line-height: 1;
+    margin-bottom: 6px;
+  }
+
+  .stat-label {
+    font-size: 11px;
+    color: #888;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    font-family: 'IBM Plex Mono', monospace;
+    line-height: 1.4;
+  }
+
+  .stat-source {
+    font-size: 10px;
+    color: #555;
+    margin-top: 8px;
+    font-family: 'IBM Plex Mono', monospace;
+  }
+
+  /* Chart Sections */
+  .chart-section {
+    background: var(--mid);
+    border: 1px solid var(--line);
+    padding: 28px;
+    margin-bottom: 28px;
+    animation: fadeIn 0.8s ease forwards;
+    opacity: 0;
+    animation-delay: 0.5s;
+  }
+
+  .chart-section:nth-child(2) { animation-delay: 0.6s; }
+  .chart-section:nth-child(3) { animation-delay: 0.7s; }
+  .chart-section:nth-child(4) { animation-delay: 0.8s; }
+
+  .chart-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .chart-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--cream);
+    line-height: 1.3;
+  }
+
+  .chart-badge {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 2px;
+    color: var(--blood);
+    background: rgba(192, 57, 43, 0.12);
+    border: 1px solid rgba(192, 57, 43, 0.3);
+    padding: 4px 10px;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  .chart-insight {
+    font-size: 12px;
+    color: #777;
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid var(--line);
+    font-family: 'IBM Plex Mono', monospace;
+    line-height: 1.6;
+  }
+
+  .chart-insight strong {
+    color: var(--gold);
+  }
+
+  .chart-wrapper {
+    position: relative;
+    height: 280px;
+  }
+
+  /* Afghanistan breakdown special layout */
+  .afg-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    align-items: center;
+  }
+
+  .afg-bars {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .afg-bar-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .afg-bar-label {
+    font-size: 11px;
+    color: #aaa;
+    font-family: 'IBM Plex Mono', monospace;
+    display: flex;
+    justify-content: space-between;
+  }
+
+  .afg-bar-label span {
+    color: var(--cream);
+    font-weight: 500;
+  }
+
+  .afg-bar-track {
+    height: 8px;
+    background: rgba(255,255,255,0.06);
+    border-radius: 0;
+    overflow: hidden;
+  }
+
+  .afg-bar-fill {
+    height: 100%;
+    background: var(--blood);
+    width: 0;
+    transition: width 1.5s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .afg-bar-fill.gold { background: var(--gold); }
+  .afg-bar-fill.dim { background: #555; }
+
+  .afg-total-box {
+    border: 1px solid rgba(192, 57, 43, 0.4);
+    padding: 24px;
+    text-align: center;
+    background: rgba(192, 57, 43, 0.06);
+  }
+
+  .afg-total-label {
+    font-size: 11px;
+    color: #888;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    font-family: 'IBM Plex Mono', monospace;
+    margin-bottom: 8px;
+  }
+
+  .afg-total-value {
+    font-family: 'Playfair Display', serif;
+    font-size: 42px;
+    font-weight: 900;
+    color: var(--blood);
+    line-height: 1;
+  }
+
+  .afg-total-sub {
+    font-size: 11px;
+    color: #666;
+    margin-top: 8px;
+    font-family: 'IBM Plex Mono', monospace;
+  }
+
+  .afg-vs {
+    margin-top: 20px;
+    padding-top: 16px;
+    border-top: 1px solid var(--line);
+    font-size: 11px;
+    color: #666;
+    font-family: 'IBM Plex Mono', monospace;
+    text-align: center;
+  }
+
+  .afg-vs strong {
+    color: var(--gold);
+    font-size: 13px;
+    display: block;
+    margin-bottom: 4px;
+  }
+
+  /* India impact section */
+  .impact-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 12px;
+  }
+
+  .impact-card {
+    border: 1px solid var(--line);
+    padding: 16px;
+    position: relative;
+    overflow: hidden;
+    transition: all 0.25s ease;
+  }
+
+  .impact-card::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+  }
+
+  .impact-card.red::before { background: var(--blood); }
+  .impact-card.gold::before { background: var(--gold); }
+  .impact-card.gray::before { background: #555; }
+
+  .impact-card:hover {
+    background: rgba(255,255,255,0.03);
+    transform: translateX(3px);
+  }
+
+  .impact-sector {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: #666;
+    font-family: 'IBM Plex Mono', monospace;
+    margin-bottom: 6px;
+  }
+
+  .impact-action {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--cream);
+    margin-bottom: 4px;
+  }
+
+  .impact-action.red { color: #e74c3c; }
+  .impact-action.gold-text { color: var(--gold); }
+
+  .impact-reason {
+    font-size: 11px;
+    color: #666;
+    line-height: 1.4;
+    font-family: 'IBM Plex Mono', monospace;
+  }
+
+  /* Footer */
+  .footer {
+    margin-top: 48px;
+    padding-top: 24px;
+    border-top: 1px solid var(--line);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: gap;
+    gap: 16px;
+  }
+
+  .footer-brand {
+    font-family: 'Playfair Display', serif;
+    font-size: 14px;
+    color: #666;
+  }
+
+  .footer-brand span {
+    color: var(--blood);
+  }
+
+  .footer-sources {
+    font-size: 10px;
+    color: #555;
+    font-family: 'IBM Plex Mono', monospace;
+    text-align: right;
+    line-height: 1.8;
+  }
+
+  .footer-sources a {
+    color: #666;
+    text-decoration: none;
+    transition: color 0.2s;
+  }
+
+  .footer-sources a:hover { color: var(--blood); }
+
+  /* Animations */
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes slideUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Responsive */
+  @media (max-width: 600px) {
+    .afg-grid { grid-template-columns: 1fr; }
+    .chart-wrapper { height: 220px; }
+    .afg-total-value { font-size: 32px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="issue-tag">Issue #6 — March 6, 2026 — Data Dashboard</div>
+    <h1>God's War on <span>Borrowed Money</span></h1>
+    <div class="subtitle">uddiptokundu.substack.com — Signal, Not Noise</div>
+  </div>
+
+  <!-- Stat Cards -->
+  <div class="stat-grid">
+    <div class="stat-card">
+      <div class="stat-value">$8T</div>
+      <div class="stat-label">Total post-9/11 war costs</div>
+      <div class="stat-source">Brown Univ. Costs of War</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">$1T</div>
+      <div class="stat-label">US interest payments per year (2026)</div>
+      <div class="stat-source">CBO Feb 2026</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">120%</div>
+      <div class="stat-label">US debt-to-GDP by 2036</div>
+      <div class="stat-source">CBO Feb 2026</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">200+</div>
+      <div class="stat-label">Military complaints about God's plan briefings</div>
+      <div class="stat-source">MRFF, March 2026</div>
+    </div>
+  </div>
+
+  <!-- Chart 1: US Debt-to-GDP -->
+  <div class="chart-section">
+    <div class="chart-header">
+      <div class="chart-title">US Debt-to-GDP Ratio — Breaking Historical Records</div>
+      <div class="chart-badge">CBO Data</div>
+    </div>
+    <div class="chart-wrapper">
+      <canvas id="debtChart"></canvas>
+    </div>
+    <div class="chart-insight">
+      <strong>Key insight:</strong> US debt-to-GDP hits 120% by 2036 — surpassing the WW2 record of 106%. America now pays more in interest ($1T/year) than it spends on Medicaid. Iran war costs not yet included.
+    </div>
+  </div>
+
+  <!-- Chart 2: Afghanistan Cost Breakdown -->
+  <div class="chart-section">
+    <div class="chart-header">
+      <div class="chart-title">Afghanistan War — $2.3 Trillion and Still Counting</div>
+      <div class="chart-badge">Brown University</div>
+    </div>
+    <div class="afg-grid">
+      <div class="afg-bars" id="afgBars">
+        <div class="afg-bar-item">
+          <div class="afg-bar-label">Military Operations <span>$933B</span></div>
+          <div class="afg-bar-track"><div class="afg-bar-fill" data-width="80"></div></div>
+        </div>
+        <div class="afg-bar-item">
+          <div class="afg-bar-label">Operational Costs <span>$443B</span></div>
+          <div class="afg-bar-track"><div class="afg-bar-fill" data-width="38"></div></div>
+        </div>
+        <div class="afg-bar-item">
+          <div class="afg-bar-label">Interest Paid <span>$530B</span></div>
+          <div class="afg-bar-track"><div class="afg-bar-fill gold" data-width="46"></div></div>
+        </div>
+        <div class="afg-bar-item">
+          <div class="afg-bar-label">Veterans Care <span>$296B</span></div>
+          <div class="afg-bar-track"><div class="afg-bar-fill dim" data-width="25"></div></div>
+        </div>
+        <div class="afg-bar-item">
+          <div class="afg-bar-label">Interest by 2050s <span>$6.5T</span></div>
+          <div class="afg-bar-track"><div class="afg-bar-fill gold" data-width="100"></div></div>
+        </div>
+      </div>
+      <div>
+        <div class="afg-total-box">
+          <div class="afg-total-label">Afghanistan Total</div>
+          <div class="afg-total-value">$2.3T</div>
+          <div class="afg-total-sub">$300M per day × 20 years</div>
+          <div class="afg-vs">
+            <strong>Iran has:</strong>
+            2,000+ ballistic missiles · Active Navy · Nuclear programme · $400B GDP
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="chart-insight">
+      <strong>Key insight:</strong> Afghanistan had no air force, no navy, no missiles. Iran has all three — plus Hormuz. The cost curve for Iran will dwarf Afghanistan, yet America is already drowning in debt from the last round.
+    </div>
+  </div>
+
+  <!-- Chart 3: US Interest Payments Projection -->
+  <div class="chart-section">
+    <div class="chart-header">
+      <div class="chart-title">US Interest Payments — The Unstoppable Spiral</div>
+      <div class="chart-badge">Peterson Foundation</div>
+    </div>
+    <div class="chart-wrapper">
+      <canvas id="interestChart"></canvas>
+    </div>
+    <div class="chart-insight">
+      <strong>Key insight:</strong> Interest payments double from $1T in 2026 to $2.1T by 2036 — before accounting for Iran war borrowing. By 2038, interest will exceed ALL discretionary spending combined.
+    </div>
+  </div>
+
+  <!-- Chart 4: India Portfolio Impact -->
+  <div class="chart-section">
+    <div class="chart-header">
+      <div class="chart-title">Your Indian Portfolio — What To Do Now</div>
+      <div class="chart-badge">Uddipto's Framework</div>
+    </div>
+    <div class="impact-grid">
+      <div class="impact-card red">
+        <div class="impact-sector">Avoid</div>
+        <div class="impact-action red">✕ Aviation</div>
+        <div class="impact-reason">Fuel costs spike. Flights cancelled. Revenue collapses.</div>
+      </div>
+      <div class="impact-card red">
+        <div class="impact-sector">Avoid</div>
+        <div class="impact-action red">✕ Oil Marketing</div>
+        <div class="impact-reason">Buy expensive, sell at controlled price. Margin squeeze.</div>
+      </div>
+      <div class="impact-card red">
+        <div class="impact-sector">Avoid</div>
+        <div class="impact-action red">✕ Paints & Tyres</div>
+        <div class="impact-reason">Petrochemical raw materials surge. Margins compress.</div>
+      </div>
+      <div class="impact-card red">
+        <div class="impact-sector">Avoid</div>
+        <div class="impact-action red">✕ Fertilizers</div>
+        <div class="impact-reason">70% sulphur from Gulf. June sowing at risk.</div>
+      </div>
+      <div class="impact-card gold">
+        <div class="impact-sector">Buy</div>
+        <div class="impact-action gold-text">✓ Gold</div>
+        <div class="impact-reason">Debt-financed war = inflation = gold wins. Position, not trade.</div>
+      </div>
+      <div class="impact-card gold">
+        <div class="impact-sector">Buy</div>
+        <div class="impact-action gold-text">✓ Defence</div>
+        <div class="impact-reason">HAL, BEL, Mazagon Dock. Decade-long structural buy.</div>
+      </div>
+      <div class="impact-card gold">
+        <div class="impact-sector">Buy</div>
+        <div class="impact-action gold-text">✓ Domestic Logistics</div>
+        <div class="impact-reason">International freight frozen. Domestic volumes rise.</div>
+      </div>
+      <div class="impact-card gray">
+        <div class="impact-sector">Watch</div>
+        <div class="impact-action">⟳ IT Sector</div>
+        <div class="impact-reason">Rupee helps margins now. Recession risk later.</div>
+      </div>
+    </div>
+    <div class="chart-insight">
+      <strong>Nifty levels:</strong> 24,500 broken → 24,000 next support → 23,500 if war extends 4+ weeks. Deploy 20-25% at each 3-5% decline. Keep dry powder for Trump's "mission accomplished" moment.
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    <div class="footer-brand">
+      <span>Uddipto Kundu</span> — Signal, Not Noise<br>
+      <span style="font-size:11px; color:#555; font-family: 'IBM Plex Mono', monospace;">uddiptokundu.substack.com</span>
+    </div>
+    <div class="footer-sources">
+      Sources: Brown University Costs of War Project · CBO Feb 2026<br>
+      Peterson Foundation · MRFF · Al Jazeera · Military.com
+    </div>
+  </div>
+
+</div>
+
+<script>
+// Chart defaults
+Chart.defaults.color = '#666';
+Chart.defaults.font.family = "'IBM Plex Mono', monospace";
+Chart.defaults.font.size = 11;
+
+// Chart 1: Debt-to-GDP
+const debtCtx = document.getElementById('debtChart').getContext('2d');
+new Chart(debtCtx, {
+  type: 'line',
+  data: {
+    labels: ['1946\n(WW2 Peak)', '1960', '1980', '2000', '2010', '2020', '2026\n(Now)', '2029', '2036'],
+    datasets: [{
+      label: 'Debt-to-GDP %',
+      data: [106, 55, 32, 55, 85, 100, 101, 107, 120],
+      borderColor: '#c0392b',
+      backgroundColor: 'rgba(192,57,43,0.08)',
+      borderWidth: 2.5,
+      pointBackgroundColor: (ctx) => {
+        const index = ctx.dataIndex;
+        return [0, 6, 8].includes(index) ? '#c0392b' : 'transparent';
+      },
+      pointBorderColor: (ctx) => {
+        const index = ctx.dataIndex;
+        return [0, 6, 8].includes(index) ? '#c0392b' : 'transparent';
+      },
+      pointRadius: (ctx) => {
+        const index = ctx.dataIndex;
+        return [0, 6, 8].includes(index) ? 6 : 3;
+      },
+      tension: 0.4,
+      fill: true,
+    }]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        backgroundColor: '#2c2c2c',
+        borderColor: 'rgba(192,57,43,0.4)',
+        borderWidth: 1,
+        callbacks: {
+          label: (ctx) => ` ${ctx.raw}% of GDP`
+        }
+      },
+      annotation: {
+        annotations: {}
+      }
+    },
+    scales: {
+      x: {
+        grid: { color: 'rgba(255,255,255,0.04)', drawBorder: false },
+        ticks: { color: '#555', font: { size: 10 } }
+      },
+      y: {
+        grid: { color: 'rgba(255,255,255,0.04)', drawBorder: false },
+        ticks: {
+          color: '#555',
+          font: { size: 10 },
+          callback: (val) => val + '%'
+        },
+        min: 0,
+        max: 140
+      }
+    }
+  }
+});
+
+// Chart 2: Afghanistan bars animation
+function animateBars() {
+  const bars = document.querySelectorAll('.afg-bar-fill');
+  bars.forEach((bar, i) => {
+    setTimeout(() => {
+      bar.style.width = bar.dataset.width + '%';
+    }, i * 200 + 300);
+  });
+}
+
+// Intersection Observer for bar animation
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      animateBars();
+      observer.disconnect();
+    }
+  });
+}, { threshold: 0.3 });
+
+const afgSection = document.querySelector('#afgBars');
+if (afgSection) observer.observe(afgSection);
+
+// Chart 3: Interest Payments
+const interestCtx = document.getElementById('interestChart').getContext('2d');
+new Chart(interestCtx, {
+  type: 'bar',
+  data: {
+    labels: ['2023', '2024', '2025', '2026\n(Now)', '2028', '2030', '2032', '2034', '2036'],
+    datasets: [{
+      label: 'Annual Interest Payments ($T)',
+      data: [0.66, 0.88, 0.95, 1.00, 1.18, 1.42, 1.68, 1.89, 2.10],
+      backgroundColor: (ctx) => {
+        const index = ctx.dataIndex;
+        if (index === 3) return 'rgba(192,57,43,0.9)';
+        if (index > 3) return 'rgba(192,57,43,0.4)';
+        return 'rgba(100,100,100,0.4)';
+      },
+      borderColor: (ctx) => {
+        const index = ctx.dataIndex;
+        return index === 3 ? '#c0392b' : 'transparent';
+      },
+      borderWidth: 1,
+      borderRadius: 0,
+    }]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        backgroundColor: '#2c2c2c',
+        borderColor: 'rgba(192,57,43,0.4)',
+        borderWidth: 1,
+        callbacks: {
+          label: (ctx) => ` $${ctx.raw}T per year`
+        }
+      }
+    },
+    scales: {
+      x: {
+        grid: { display: false },
+        ticks: { color: '#555', font: { size: 10 } }
+      },
+      y: {
+        grid: { color: 'rgba(255,255,255,0.04)', drawBorder: false },
+        ticks: {
+          color: '#555',
+          font: { size: 10 },
+          callback: (val) => '$' + val + 'T'
+        },
+        min: 0,
+        max: 2.5
+      }
+    },
+    animation: {
+      duration: 1200,
+      easing: 'easeOutQuart'
+    }
+  }
+});
+</script>
+</body>
+</html>
